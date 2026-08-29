@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import ConnectBank from "@/components/ConnectBank";
 import AddMerchant from "@/components/AddMerchant";
@@ -8,17 +8,55 @@ import { categoryColor } from "@/lib/colors";
 import { useCategories } from "@/lib/useCategories";
 
 export default function TransactionsPage() {
-  const { categories: CATEGORIES } = useCategories();
+  const { categories: CATEGORIES, styles } = useCategories();
   const [txns, setTxns] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState("");
   const [showAddMerchant, setShowAddMerchant] = useState(false);
 
+  // filters & sorting (applied client-side for instant response)
+  const [fCategory, setFCategory] = useState("All");
+  const [fRange, setFRange] = useState<"all" | "month" | "30" | "90">("all");
+  const [fSearch, setFSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "amount-desc" | "amount-asc" | "merchant">("date-desc");
+
   const load = useCallback(() => {
-    api("/transactions?limit=200").then(setTxns).catch((e) => setError(e.message));
+    api("/transactions?limit=500").then(setTxns).catch((e) => setError(e.message));
   }, []);
   useEffect(load, [load]);
+
+  const visible = useMemo(() => {
+    let list = [...txns];
+    if (fCategory !== "All") list = list.filter((t) => t.category === fCategory);
+    if (fRange !== "all") {
+      let cutoff: string;
+      if (fRange === "month") {
+        const d = new Date();
+        cutoff = `${d.toISOString().slice(0, 7)}-01`;
+      } else {
+        cutoff = new Date(Date.now() - Number(fRange) * 86_400_000).toISOString().slice(0, 10);
+      }
+      list = list.filter((t) => t.date >= cutoff);
+    }
+    if (fSearch.trim()) {
+      const q = fSearch.trim().toLowerCase();
+      list = list.filter((t) => `${t.merchant} ${t.rawDescription}`.toLowerCase().includes(q));
+    }
+    const cmp: Record<typeof sortBy, (a: any, b: any) => number> = {
+      "date-desc": (a, b) => b.date.localeCompare(a.date),
+      "date-asc": (a, b) => a.date.localeCompare(b.date),
+      "amount-desc": (a, b) => b.amount - a.amount,
+      "amount-asc": (a, b) => a.amount - b.amount,
+      merchant: (a, b) => a.merchant.localeCompare(b.merchant) || b.date.localeCompare(a.date),
+    };
+    return list.sort(cmp[sortBy]);
+  }, [txns, fCategory, fRange, fSearch, sortBy]);
+
+  const visibleSpend = useMemo(
+    () => visible.reduce((s, t) => (t.amount > 0 ? s + t.amount : s), 0),
+    [visible]
+  );
 
   async function onCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -83,14 +121,67 @@ export default function TransactionsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-muted border-b border-hairline">
-              <th className="p-3 font-medium">Date</th>
-              <th className="p-3 font-medium">Merchant</th>
-              <th className="p-3 font-medium">Category</th>
-              <th className="p-3 font-medium text-right">Amount</th>
+              <th className="p-3 font-medium whitespace-nowrap">
+                <button
+                  className="hover:text-ink"
+                  title="Sort by date"
+                  onClick={() => setSortBy(sortBy === "date-desc" ? "date-asc" : "date-desc")}
+                >
+                  Date {sortBy === "date-desc" ? "↓" : sortBy === "date-asc" ? "↑" : ""}
+                </button>{" "}
+                <select
+                  className="bg-transparent border border-hairline rounded px-1 py-0.5 text-xs cursor-pointer"
+                  value={fRange}
+                  onChange={(e) => setFRange(e.target.value as any)}
+                  aria-label="Date range filter"
+                >
+                  <option value="all">All time</option>
+                  <option value="month">This month</option>
+                  <option value="30">Last 30d</option>
+                  <option value="90">Last 90d</option>
+                </select>
+              </th>
+              <th className="p-3 font-medium whitespace-nowrap">
+                <button
+                  className="hover:text-ink"
+                  title="Sort by merchant A–Z"
+                  onClick={() => setSortBy("merchant")}
+                >
+                  Merchant {sortBy === "merchant" ? "↓" : ""}
+                </button>{" "}
+                <input
+                  className="bg-transparent border border-hairline rounded px-1.5 py-0.5 text-xs w-28 font-normal"
+                  placeholder="search…"
+                  value={fSearch}
+                  onChange={(e) => setFSearch(e.target.value)}
+                  aria-label="Search merchant or description"
+                />
+              </th>
+              <th className="p-3 font-medium whitespace-nowrap">
+                Category{" "}
+                <select
+                  className="bg-transparent border border-hairline rounded px-1 py-0.5 text-xs cursor-pointer"
+                  value={fCategory}
+                  onChange={(e) => setFCategory(e.target.value)}
+                  aria-label="Category filter"
+                >
+                  <option>All</option>
+                  {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                </select>
+              </th>
+              <th className="p-3 font-medium text-right whitespace-nowrap">
+                <button
+                  className="hover:text-ink"
+                  title="Sort by amount"
+                  onClick={() => setSortBy(sortBy === "amount-desc" ? "amount-asc" : "amount-desc")}
+                >
+                  Amount {sortBy === "amount-desc" ? "↓" : sortBy === "amount-asc" ? "↑" : ""}
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {txns.map((t) => (
+            {visible.map((t) => (
               <tr key={t._docID} className="border-b border-hairline last:border-0">
                 <td className="p-3 whitespace-nowrap text-ink-2">{t.date}</td>
                 <td className="p-3">
@@ -99,7 +190,7 @@ export default function TransactionsPage() {
                 </td>
                 <td className="p-3">
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: categoryColor(t.category) }} />
+                    <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: categoryColor(t.category, styles) }} />
                     <select
                       className="bg-transparent border border-transparent hover:border-hairline focus:border-hairline rounded px-1 py-0.5 text-sm cursor-pointer"
                       value={CATEGORIES.includes(t.category) ? t.category : "Other"}
@@ -117,8 +208,25 @@ export default function TransactionsPage() {
             ))}
           </tbody>
         </table>
-        {txns.length === 0 && !error && <p className="p-4 text-sm text-muted">No transactions yet.</p>}
+        {visible.length === 0 && !error && (
+          <p className="p-4 text-sm text-muted">
+            {txns.length === 0 ? "No transactions yet." : "Nothing matches the current filters."}
+          </p>
+        )}
       </div>
+      {visible.length > 0 && (
+        <p className="text-xs text-muted mt-2">
+          {visible.length} transaction{visible.length === 1 ? "" : "s"} · {fmtCad(visibleSpend)} spent
+          {(fCategory !== "All" || fRange !== "all" || fSearch.trim()) && (
+            <button
+              className="ml-2 underline hover:text-ink"
+              onClick={() => { setFCategory("All"); setFRange("all"); setFSearch(""); }}
+            >
+              clear filters
+            </button>
+          )}
+        </p>
+      )}
 
       {showAddMerchant && (
         <AddMerchant

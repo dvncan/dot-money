@@ -37,9 +37,15 @@ export function TrendChart({ data }: { data: Array<{ month: string; total: numbe
 }
 
 /** Category breakdown as labeled horizontal bars. Color follows the category
- *  (fixed slot map), never its rank; every bar carries a direct label so
- *  identity never rides on color alone. */
-export function CategoryBars({ data }: { data: Array<{ category: string; total: number }> }) {
+ *  (fixed slot map + the user's overrides), never its rank; every bar carries
+ *  a direct label so identity never rides on color alone. */
+export function CategoryBars({
+  data,
+  colors,
+}: {
+  data: Array<{ category: string; total: number }>;
+  colors?: Record<string, string>;
+}) {
   const max = Math.max(...data.map((d) => d.total), 1);
   return (
     <div className="flex flex-col gap-2">
@@ -51,7 +57,7 @@ export function CategoryBars({ data }: { data: Array<{ category: string; total: 
               className="h-4 rounded"
               style={{
                 width: `${Math.max((d.total / max) * 100, 2)}%`,
-                background: categoryColor(d.category),
+                background: categoryColor(d.category, colors),
                 borderRadius: "4px",
               }}
             />

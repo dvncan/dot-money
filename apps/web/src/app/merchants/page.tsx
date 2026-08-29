@@ -11,7 +11,7 @@ function titleCase(s: string): string {
 }
 
 export default function MerchantsPage() {
-  const { categories: CATEGORIES, custom, reload: reloadCategories } = useCategories();
+  const { categories: CATEGORIES, styles, hidden, reload: reloadCategories } = useCategories();
   const [unknown, setUnknown] = useState<any[]>([]);
   const [mine, setMine] = useState<any[]>([]);
   const [msg, setMsg] = useState("");
@@ -20,6 +20,9 @@ export default function MerchantsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<MerchantRecord | null>(null);
   const [newCategory, setNewCategory] = useState("");
+  const [pickingFor, setPickingFor] = useState<string | null>(null);
+  const [hexDraft, setHexDraft] = useState("#888888");
+  const [renameDraft, setRenameDraft] = useState("");
 
   const load = useCallback(() => {
     api("/merchants/uncategorized").then(setUnknown).catch((e) => setError(e.message));
@@ -71,15 +74,44 @@ export default function MerchantsPage() {
     }
   }
 
-  async function removeCategory(id: string, name: string) {
+  async function setColor(category: string, color: string) {
     setMsg("");
     try {
-      const res = await api<any>(`/categories/${id}`, { method: "DELETE" });
-      setMsg(`Category "${name}" removed${res.reassignedTransactions ? ` — ${res.reassignedTransactions} transactions moved to Other` : ""}.`);
+      await api("/categories/style", { method: "POST", body: JSON.stringify({ category, color }) });
+      reloadCategories();
+      setPickingFor(null);
+    } catch (err: any) {
+      setMsg(`Couldn't set colour: ${err.message}`);
+    }
+  }
+
+  async function removeCategory(name: string) {
+    setMsg("");
+    try {
+      const res = await api<any>("/categories/delete", { method: "POST", body: JSON.stringify({ name }) });
+      setMsg(
+        `Category "${name}" ${res.hiddenBuiltin ? "hidden" : "removed"}` +
+        (res.reassignedTransactions ? ` — ${res.reassignedTransactions} transactions moved to Other.` : ".")
+      );
+      if (pickingFor === name) setPickingFor(null);
       reloadCategories();
       load();
     } catch (err: any) {
       setMsg(`Couldn't remove: ${err.message}`);
+    }
+  }
+
+  async function renameCategory(from: string, to: string) {
+    if (!to.trim() || to.trim() === from) return;
+    setMsg("");
+    try {
+      const res = await api<any>("/categories/rename", { method: "POST", body: JSON.stringify({ from, to: to.trim() }) });
+      setMsg(`Renamed "${from}" → "${to.trim()}"${res.renamedTransactions ? ` (${res.renamedTransactions} transactions updated)` : ""}.`);
+      setPickingFor(null);
+      reloadCategories();
+      load();
+    } catch (err: any) {
+      setMsg(`Couldn't rename: ${err.message}`);
     }
   }
 
@@ -142,17 +174,111 @@ export default function MerchantsPage() {
 
       <h2 className="text-lg font-semibold mb-3">Your categories</h2>
       <div className="card p-4 mb-8">
+        <p className="text-xs text-muted mb-3">Click a category's colour dot to edit its colour and name; × deletes it (its transactions move to Other). "Other" is the fallback bucket and stays put.</p>
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          {custom.map((c) => (
-            <span key={c._docID} className="inline-flex items-center gap-1.5 text-sm px-3 py-1 rounded-full border border-hairline">
-              {c.name}
-              <button className="text-muted hover:text-ink" title={`Remove ${c.name}`} onClick={() => removeCategory(c._docID, c.name)}>
-                ×
+          {CATEGORIES.map((name) => (
+            <span key={name} className="inline-flex items-center gap-1.5 text-sm px-3 py-1 rounded-full border border-hairline">
+              <button
+                type="button"
+                className="w-3.5 h-3.5 rounded-full border border-hairline shrink-0"
+                style={{ background: categoryColor(name, styles) }}
+                title={`Edit ${name}`}
+                onClick={() => {
+                  setPickingFor(pickingFor === name ? null : name);
+                  setRenameDraft(name);
+                }}
+              />
+              {name}
+              {name !== "Other" && (
+                <button type="button" className="text-muted hover:text-ink" title={`Delete ${name}`} onClick={() => removeCategory(name)}>
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+          {hidden.map((name) => (
+            <span key={name} className="inline-flex items-center gap-1.5 text-sm px-3 py-1 rounded-full border border-dashed border-hairline text-muted">
+              {name}
+              <button
+                type="button"
+                className="text-xs underline hover:text-ink"
+                title={`Restore ${name}`}
+                onClick={async () => {
+                  await api("/categories/restore", { method: "POST", body: JSON.stringify({ name }) });
+                  setMsg(`"${name}" restored.`);
+                  reloadCategories();
+                }}
+              >
+                restore
               </button>
             </span>
           ))}
-          {custom.length === 0 && <span className="text-sm text-muted">No custom categories yet — built-ins cover the basics.</span>}
         </div>
+
+        {pickingFor && (
+          <div className="border border-hairline rounded-lg p-3 mb-3 flex flex-wrap items-center gap-3">
+            {pickingFor !== "Other" && (
+              <span className="inline-flex items-center gap-1.5 text-sm text-ink-2 w-full">
+                Name:
+                <input
+                  className="card px-2 py-1 text-sm w-44"
+                  value={renameDraft}
+                  maxLength={24}
+                  onChange={(e) => setRenameDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); renameCategory(pickingFor, renameDraft); } }}
+                />
+                <button
+                  type="button"
+                  className="px-2 py-1 rounded border border-hairline text-xs"
+                  disabled={!renameDraft.trim() || renameDraft.trim() === pickingFor}
+                  onClick={() => renameCategory(pickingFor, renameDraft)}
+                >
+                  Rename
+                </button>
+              </span>
+            )}
+            <span className="text-sm text-ink-2">Colour for <strong>{pickingFor}</strong>:</span>
+            <span className="inline-flex gap-1.5">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className="w-6 h-6 rounded-full border border-hairline hover:scale-110 transition-transform"
+                  style={{ background: `var(--series-${n})` }}
+                  title={`Palette slot ${n}`}
+                  onClick={() => setColor(pickingFor, `slot:${n}`)}
+                />
+              ))}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-sm text-ink-2">
+              <input type="color" className="w-8 h-8 cursor-pointer bg-transparent" value={hexDraft} onChange={(e) => setHexDraft(e.target.value)} />
+              <button type="button" className="px-2 py-1 rounded border border-hairline text-xs" onClick={() => setColor(pickingFor, hexDraft)}>
+                Use hex
+              </button>
+            </span>
+            <button
+              type="button"
+              className="px-2 py-1 rounded border border-hairline text-xs"
+              onClick={async () => {
+                try {
+                  const res = await api<any>("/categories/reset", { method: "POST", body: JSON.stringify({ name: pickingFor }) });
+                  setMsg(res.renamed ? `Reset — back to "${res.name}" with its default colour.` : `Colour for "${res.name}" reset to default.`);
+                  setPickingFor(null);
+                  reloadCategories();
+                  load();
+                } catch (err: any) {
+                  setMsg(`Couldn't reset: ${err.message}`);
+                }
+              }}
+            >
+              Reset to default
+            </button>
+            <button type="button" className="text-xs text-muted hover:text-ink ml-auto" onClick={() => setPickingFor(null)}>
+              close
+            </button>
+          </div>
+        )}
+
         <form onSubmit={addCategory} className="flex gap-2">
           <input
             className="card px-3 py-2 text-sm flex-1 max-w-xs"
@@ -171,7 +297,7 @@ export default function MerchantsPage() {
       <div className="flex flex-col gap-2">
         {mine.map((m) => (
           <div key={m._docID} className="card p-3 flex items-center gap-3 text-sm">
-            <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: categoryColor(m.category) }} />
+            <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ background: categoryColor(m.category, styles) }} />
             <span className="font-medium">{m.name}</span>
             <span className="text-muted">matches “{m.pattern}”</span>
             <span className="text-ink-2">{m.category}</span>

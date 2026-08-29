@@ -26,6 +26,17 @@ export default function CancellationsPage() {
     setOpen(null);
   }
 
+  // Undo: deletes the request (row disappears) and reactivates its subscription.
+  async function undo(id: string) {
+    setRows(rows.filter((r) => r._docID !== id)); // remove from the page immediately
+    try {
+      await api(`/cancellation-requests/${id}`, { method: "DELETE" });
+    } finally {
+      load();
+      setOpen(null);
+    }
+  }
+
   return (
     <AppShell>
       <h1 className="text-2xl font-semibold mb-2">Cancellations & refunds</h1>
@@ -49,6 +60,13 @@ export default function CancellationsPage() {
               <span className="text-sm" style={{ color: overdue ? "var(--status-critical)" : "var(--text-secondary)" }}>
                 {overdue ? "⏰ deadline passed" : r.status}
               </span>
+              <button
+                className="text-sm px-3 py-1.5 rounded-lg border border-hairline hover:bg-plane"
+                title="Remove this request and reactivate the subscription"
+                onClick={() => undo(r._docID)}
+              >
+                Undo
+              </button>
               <button className="text-sm px-3 py-1.5 rounded-lg border border-hairline" onClick={() => setOpen(r)}>
                 View
               </button>

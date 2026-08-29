@@ -6,7 +6,7 @@
 import { Configuration, CountryCode, PlaidApi, PlaidEnvironments, Products } from "plaid";
 import { config } from "../config.js";
 import { createDoc, findDocs, updateDoc } from "../lib/defra.js";
-import { categorizeTxn, getMerchantIndex, normalizeMerchant } from "./categorizer.js";
+import { categorizeTxn, getCategoryAliases, getMerchantIndex, normalizeMerchant } from "./categorizer.js";
 
 let client: PlaidApi | null = null;
 
@@ -85,6 +85,7 @@ export async function syncTransactions(userId: string): Promise<number> {
   );
 
   const merchantIndex = await getMerchantIndex(userId);
+  const aliases = await getCategoryAliases(userId);
   const uniqueTokens = [...new Set(accounts.map((a: any) => a.plaidAccessToken).filter(Boolean))];
   for (const token of uniqueTokens) {
     const end = new Date().toISOString().slice(0, 10);
@@ -104,7 +105,8 @@ export async function syncTransactions(userId: string): Promise<number> {
         merchantIndex,
         normalized,
         t.name,
-        (t as any).personal_finance_category?.primary
+        (t as any).personal_finance_category?.primary,
+        aliases
       );
       await createDoc("Txn", {
         userId,

@@ -108,3 +108,17 @@ type Category {
   userId: String @index   # owner — custom categories are per-user
   createdAt: String
 }
+
+type CategoryStyle {
+  userId: String @index
+  category: String @index
+  color: String            # "slot:1".."slot:8" (theme-aware palette) or "#rrggbb"
+  createdAt: String
+}
+
+type CategoryAlias {
+  userId: String @index
+  from: String @index      # original builtin category name
+  to: String               # the user's display name for it
+  createdAt: String
+}

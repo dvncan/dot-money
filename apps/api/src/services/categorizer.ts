@@ -40,6 +40,18 @@ export interface MerchantIndexEntry {
 const CACHE_TTL_MS = 60_000;
 const indexCache = new Map<string, { at: number; entries: MerchantIndexEntry[] }>();
 
+/** Per-user renames of builtin categories: original name → display name. */
+export async function getCategoryAliases(userId?: string): Promise<Record<string, string>> {
+  if (!userId) return {};
+  const rows = await findDocs<any>("CategoryAlias", ["from", "to"], {
+    filter: { userId: { _eq: userId } },
+    limit: 100,
+  });
+  const map: Record<string, string> = {};
+  for (const r of rows) map[r.from] = r.to;
+  return map;
+}
+
 /** Built-in merchants + this user's own, longest pattern first. Cached 60s. */
 export async function getMerchantIndex(userId?: string): Promise<MerchantIndexEntry[]> {
   const key = userId ?? "";
@@ -53,6 +65,9 @@ export async function getMerchantIndex(userId?: string): Promise<MerchantIndexEn
     filter,
     limit: 5000,
   });
+  // apply the user's builtin-category renames so index results carry display names
+  const aliases = await getCategoryAliases(userId);
+  for (const r of rows) r.category = aliases[r.category] ?? r.category;
   // a merchant's pattern field holds one or more comma-separated match texts —
   // expand to one index entry per pattern; user-added merchants outrank
   // builtins at equal pattern length
@@ -84,21 +99,23 @@ export function categorizeTxn(
   index: MerchantIndexEntry[],
   merchant: string,
   rawDescription = "",
-  plaidHint?: string
+  plaidHint?: string,
+  aliases: Record<string, string> = {}
 ): CategorizeResult {
   const text = `${merchant} ${rawDescription}`.toLowerCase();
   for (const entry of index) {
     if (text.includes(entry.pattern)) {
+      // index categories are already alias-mapped in getMerchantIndex
       return { category: entry.category, canonicalName: entry.name };
     }
   }
   const byRule = regexCategory(merchant, rawDescription);
-  if (byRule !== "Other") return { category: byRule };
+  if (byRule !== "Other") return { category: aliases[byRule] ?? byRule };
   if (plaidHint) {
     const mapped = PLAID_PFC_MAP[plaidHint];
-    if (mapped) return { category: mapped };
+    if (mapped) return { category: aliases[mapped] ?? mapped };
   }
-  return { category: "Other" };
+  return { category: aliases["Other"] ?? "Other" };
 }
 
 // ---- Plaid personal_finance_category.primary → our categories ---------------

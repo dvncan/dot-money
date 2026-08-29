@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { CategoryBars, StatTile, TrendChart } from "@/components/charts";
 import { api, fmtCad } from "@/lib/api";
+import { useCategories } from "@/lib/useCategories";
 
 export default function DashboardPage() {
+  const { styles } = useCategories();
   const [data, setData] = useState<any>(null);
   const [opps, setOpps] = useState<any[]>([]);
   const [error, setError] = useState("");
@@ -36,7 +38,7 @@ export default function DashboardPage() {
             </div>
             <div className="card p-5">
               <h2 className="text-sm font-semibold mb-3">This month by category</h2>
-              <CategoryBars data={data.byCategory} />
+              <CategoryBars data={data.byCategory} colors={styles} />
             </div>
           </div>
 

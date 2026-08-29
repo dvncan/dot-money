@@ -5,7 +5,7 @@
  * Rows with amount in a "debit"/"credit" column pair are also handled.
  */
 import { createDoc, findDocs } from "../lib/defra.js";
-import { categorizeTxn, getMerchantIndex, normalizeMerchant } from "./categorizer.js";
+import { categorizeTxn, getCategoryAliases, getMerchantIndex, normalizeMerchant } from "./categorizer.js";
 
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
@@ -70,6 +70,7 @@ export async function importCsv(userId: string, csvText: string, accountLabel = 
   let imported = 0, skipped = 0;
   const errors: string[] = [];
   const merchantIndex = await getMerchantIndex(userId);
+  const aliases = await getCategoryAliases(userId);
   for (const row of rows.slice(1)) {
     const date = toIsoDate(row[iDate] ?? "");
     if (!date) { skipped++; continue; }
@@ -89,7 +90,7 @@ export async function importCsv(userId: string, csvText: string, accountLabel = 
     const normalized = iMerchant >= 0 && row[iMerchant]?.trim()
       ? normalizeMerchant(row[iMerchant]!)
       : normalizeMerchant(rawDescription);
-    const result = categorizeTxn(merchantIndex, normalized, rawDescription);
+    const result = categorizeTxn(merchantIndex, normalized, rawDescription, undefined, aliases);
     await createDoc("Txn", {
       userId, bankAccountId: accountId, date, amount,
       merchant: result.canonicalName ? normalizeMerchant(result.canonicalName) : normalized,

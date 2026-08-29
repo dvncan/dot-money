@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { createDoc, findDocs, updateDoc } from "../lib/defra.js";
+import { createDoc, deleteDoc, findDocs, updateDoc } from "../lib/defra.js";
 import { PROVINCES, TEMPLATES, renderLetter } from "../services/templates.js";
 
 const router = Router();
@@ -106,6 +106,26 @@ router.patch("/:id", async (req: AuthedRequest, res, next) => {
     if (body.status === "resolved" && owned[0].subscriptionId) {
       await updateDoc("Sub", owned[0].subscriptionId, { status: "cancelled" });
     }
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /cancellation-requests/:id — undo: removes the request entirely and
+// returns its subscription to active, so re-cancelling later starts fresh
+// with a single row.
+router.delete("/:id", async (req: AuthedRequest, res, next) => {
+  try {
+    const owned = await findDocs<any>("CancellationRequest", ["subscriptionId"], {
+      filter: { _docID: { _eq: req.params.id }, userId: { _eq: req.userId } },
+      limit: 1,
+    });
+    if (!owned[0]) return res.status(404).json({ error: "Not found" });
+    if (owned[0].subscriptionId) {
+      await updateDoc("Sub", owned[0].subscriptionId, { status: "active" });
+    }
+    await deleteDoc("CancellationRequest", req.params.id!);
     res.json({ ok: true });
   } catch (err) {
     next(err);
