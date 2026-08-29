@@ -38,6 +38,9 @@ export async function createLinkToken(userId: string): Promise<string> {
     products: [Products.Transactions],
     country_codes: [CountryCode.Ca],
     language: "en",
+    // OAuth banks (RBC, TD, BMO, …) redirect back here after the bank's own login;
+    // must exactly match a redirect URI registered in the Plaid dashboard.
+    ...(config.plaid.redirectUri ? { redirect_uri: config.plaid.redirectUri } : {}),
   });
   return res.data.link_token;
 }
@@ -108,6 +111,10 @@ export async function syncTransactions(userId: string): Promise<number> {
         (t as any).personal_finance_category?.primary,
         aliases
       );
+      const loc = t.location;
+      const location = loc
+        ? [loc.address, loc.city, loc.region].filter(Boolean).join(", ")
+        : "";
       await createDoc("Txn", {
         userId,
         bankAccountId: t.account_id,
@@ -119,6 +126,7 @@ export async function syncTransactions(userId: string): Promise<number> {
         subscriptionId: "",
         flags: [],
         source: "plaid",
+        location,
       });
       imported++;
     }

@@ -9,6 +9,16 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (err instanceof Error && typeof (err as any).status === "number") {
     return res.status((err as any).status).json({ error: err.message });
   }
+  // Axios-style upstream errors (Plaid): surface the real error instead of
+  // a generic "Request failed with status code 400"
+  const upstream = (err as any)?.response;
+  if (upstream?.data?.error_message) {
+    console.error("Plaid error:", upstream.data.error_code, upstream.data.error_message);
+    return res.status(upstream.status ?? 502).json({
+      error: `Plaid: ${upstream.data.error_message}`,
+      code: upstream.data.error_code,
+    });
+  }
   if (err instanceof DefraError) {
     console.error("DefraDB error:", err.message, err.detail);
     return res.status(502).json({ error: `Data store error: ${err.message}` });

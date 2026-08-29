@@ -45,6 +45,9 @@ export default function ConnectBank({ onLinked }: { onLinked?: () => void }) {
     setMsg("");
     try {
       const res = await api<{ linkToken: string }>("/banks/link-token", { method: "POST" });
+      // persisted so the /plaid-oauth page can resume Link after an OAuth bank
+      // redirects back (bank login happens on the bank's site, not in the modal)
+      localStorage.setItem("dotmoney_plaid_link_token", res.linkToken);
       setLinkToken(res.linkToken);
     } catch (err: any) {
       setMsg(err.message); // includes the "set PLAID_CLIENT_ID…" guidance when keys are missing

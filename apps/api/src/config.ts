@@ -17,7 +17,8 @@ export const config = {
   plaid: {
     clientId: process.env.PLAID_CLIENT_ID ?? "",
     secret: process.env.PLAID_SECRET ?? "",
-    env: (process.env.PLAID_ENV ?? "sandbox") as "sandbox" | "development" | "production",
+    env: (process.env.PLAID_ENV ?? "sandbox") as "sandbox" | "production",
+    redirectUri: process.env.PLAID_REDIRECT_URI ?? "", // required for OAuth banks (most Canadian institutions)
     get enabled() {
       return Boolean(this.clientId && this.secret);
     },

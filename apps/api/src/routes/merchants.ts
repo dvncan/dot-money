@@ -32,22 +32,35 @@ router.get("/", async (req: AuthedRequest, res, next) => {
 // these (via POST /merchants) sorts every transaction from that merchant.
 router.get("/uncategorized", async (req: AuthedRequest, res, next) => {
   try {
-    const txns = await findDocs<any>("Txn", ["merchant", "rawDescription", "amount", "date"], {
+    const txns = await findDocs<any>("Txn", ["merchant", "rawDescription", "amount", "date", "location"], {
       filter: { userId: { _eq: req.userId }, category: { _eq: "Other" } },
       limit: 10000,
     });
-    const groups = new Map<string, { merchant: string; count: number; total: number; lastDate: string; sample: string }>();
+    const groups = new Map<string, { merchant: string; sample: string; txlist: any[] }>();
     for (const t of txns) {
       const key = t.merchant || "(no description)";
-      const g = groups.get(key) ?? { merchant: key, count: 0, total: 0, lastDate: "", sample: t.rawDescription ?? "" };
-      g.count++;
-      if (t.amount > 0) g.total += t.amount;
-      if (t.date > g.lastDate) g.lastDate = t.date;
+      const g = groups.get(key) ?? { merchant: key, sample: t.rawDescription ?? "", txlist: [] as any[] };
+      g.txlist.push(t);
       groups.set(key, g);
     }
     res.json(
       [...groups.values()]
-        .map((g) => ({ ...g, total: Number(g.total.toFixed(2)) }))
+        .map((g) => {
+          const sorted = g.txlist.sort((a, b) => b.date.localeCompare(a.date));
+          const spends = sorted.filter((t) => t.amount > 0);
+          const total = spends.reduce((s, t) => s + t.amount, 0);
+          return {
+            merchant: g.merchant,
+            sample: g.sample,
+            location: sorted.find((t) => t.location)?.location ?? "",
+            count: sorted.length,
+            total: Number(total.toFixed(2)),
+            avg: spends.length ? Number((total / spends.length).toFixed(2)) : 0,
+            firstDate: sorted[sorted.length - 1]?.date ?? "",
+            lastDate: sorted[0]?.date ?? "",
+            recent: sorted.slice(0, 5).map((t) => ({ date: t.date, amount: t.amount, rawDescription: t.rawDescription })),
+          };
+        })
         .sort((a, b) => b.count - a.count || b.total - a.total)
     );
   } catch (err) {

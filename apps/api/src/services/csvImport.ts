@@ -45,14 +45,18 @@ export async function importCsv(userId: string, csvText: string, accountLabel = 
   const header = rows[0]!.map((h) => h.trim().toLowerCase());
   const col = (...names: string[]) => header.findIndex((h) => names.includes(h));
   const iDate = col("date", "transaction date", "posted date");
-  const iDesc = col("description", "details", "name", "payee");
+  const iDesc = col("description", "details", "name", "payee", "description 1");
+  const iDesc2 = col("description 2");
   const iAmount = col("amount", "value");
   const iDebit = col("debit", "withdrawal", "withdrawals");
   const iCredit = col("credit", "deposit", "deposits");
+  // RBC exports use a "CAD$" column where NEGATIVE means money out — the
+  // opposite of our convention, so RBC amounts get sign-flipped below.
+  const iCad = col("cad$");
   const iMerchant = col("merchant");
   const iCategory = col("category");
-  if (iDate < 0 || iDesc < 0 || (iAmount < 0 && iDebit < 0)) {
-    return { imported: 0, skipped: 0, errors: ["CSV must have date, description, and amount (or debit/credit) columns"] };
+  if (iDate < 0 || iDesc < 0 || (iAmount < 0 && iDebit < 0 && iCad < 0)) {
+    return { imported: 0, skipped: 0, errors: ["CSV must have date, description, and amount (or debit/credit, or RBC CAD$) columns"] };
   }
 
   const accountId = await createDoc("BankAccount", {
@@ -77,13 +81,17 @@ export async function importCsv(userId: string, csvText: string, accountLabel = 
     let amount: number;
     if (iAmount >= 0 && row[iAmount]?.trim()) {
       amount = Number(row[iAmount]!.replace(/[$,]/g, ""));
+    } else if (iCad >= 0 && row[iCad]?.trim()) {
+      amount = -Number(row[iCad]!.replace(/[$,]/g, "")); // RBC: negative = outflow → flip
     } else {
-      const debit = Number((row[iDebit] ?? "").replace(/[$,]/g, "") || 0);
+      const debit = Number((iDebit >= 0 ? row[iDebit] ?? "" : "").replace(/[$,]/g, "") || 0);
       const credit = Number((iCredit >= 0 ? row[iCredit] ?? "" : "").replace(/[$,]/g, "") || 0);
       amount = debit > 0 ? debit : -credit;
     }
     if (!isFinite(amount) || amount === 0) { skipped++; continue; }
-    const rawDescription = (row[iDesc] ?? "").trim();
+    const rawDescription = [(row[iDesc] ?? "").trim(), iDesc2 >= 0 ? (row[iDesc2] ?? "").trim() : ""]
+      .filter(Boolean)
+      .join(" ");
     const key = `${date}|${amount}|${rawDescription}`;
     if (seen.has(key)) { skipped++; continue; }
     seen.add(key);

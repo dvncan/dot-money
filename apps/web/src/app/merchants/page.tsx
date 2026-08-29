@@ -1,7 +1,8 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
 import AddMerchant, { type MerchantRecord } from "@/components/AddMerchant";
+import GeoMap from "@/components/GeoMap";
 import { api, fmtCad } from "@/lib/api";
 import { categoryColor } from "@/lib/colors";
 import { useCategories } from "@/lib/useCategories";
@@ -21,6 +22,7 @@ export default function MerchantsPage() {
   const [editing, setEditing] = useState<MerchantRecord | null>(null);
   const [newCategory, setNewCategory] = useState("");
   const [pickingFor, setPickingFor] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [hexDraft, setHexDraft] = useState("#888888");
   const [renameDraft, setRenameDraft] = useState("");
 
@@ -32,7 +34,8 @@ export default function MerchantsPage() {
 
   // Assign a category to an unknown merchant: creates a Merchant entry whose
   // pattern is the merchant string, so every past + future transaction sorts.
-  async function assign(merchant: string, category: string) {
+  // A transaction-provided location (Plaid) is saved as the merchant's address.
+  async function assign(merchant: string, category: string, location?: string) {
     if (!category) return;
     setBusyKey(merchant);
     setMsg("");
@@ -43,6 +46,7 @@ export default function MerchantsPage() {
           name: titleCase(merchant),
           pattern: merchant.toLowerCase(),
           category,
+          ...(location ? { address: location } : {}),
           upsert: true, // re-assigning a merchant that already has a rule updates it
         }),
       });
@@ -143,27 +147,60 @@ export default function MerchantsPage() {
           </thead>
           <tbody>
             {unknown.map((u) => (
-              <tr key={u.merchant} className="border-b border-hairline last:border-0">
-                <td className="p-3">
-                  <p className="truncate max-w-xs">{titleCase(u.merchant)}</p>
-                  <p className="text-xs text-muted truncate max-w-xs">{u.sample}</p>
-                </td>
-                <td className="p-3 text-right tabular-nums">{u.count}</td>
-                <td className="p-3 text-right tabular-nums">{fmtCad(u.total)}</td>
-                <td className="p-3 text-ink-2 whitespace-nowrap">{u.lastDate}</td>
-                <td className="p-3">
-                  <select
-                    className="card px-2 py-1.5 cursor-pointer"
-                    defaultValue=""
-                    disabled={busyKey === u.merchant}
-                    onChange={(e) => assign(u.merchant, e.target.value)}
-                    aria-label={`Assign category for ${u.merchant}`}
-                  >
-                    <option value="" disabled>{busyKey === u.merchant ? "Saving…" : "Choose…"}</option>
-                    {CATEGORIES.filter((c) => c !== "Other").map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </td>
-              </tr>
+              <Fragment key={u.merchant}>
+                <tr
+                  className="border-b border-hairline last:border-0 cursor-pointer hover:bg-plane"
+                  onClick={() => setExpanded(expanded === u.merchant ? null : u.merchant)}
+                  title="Click for details"
+                >
+                  <td className="p-3">
+                    <p className="truncate max-w-xs">
+                      <span className="text-muted mr-1">{expanded === u.merchant ? "▾" : "▸"}</span>
+                      {titleCase(u.merchant)}
+                    </p>
+                    <p className="text-xs text-muted truncate max-w-xs">{u.sample}</p>
+                  </td>
+                  <td className="p-3 text-right tabular-nums">{u.count}</td>
+                  <td className="p-3 text-right tabular-nums">{fmtCad(u.total)}</td>
+                  <td className="p-3 text-ink-2 whitespace-nowrap">{u.lastDate}</td>
+                  <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                    <select
+                      className="card px-2 py-1.5 cursor-pointer"
+                      defaultValue=""
+                      disabled={busyKey === u.merchant}
+                      onChange={(e) => assign(u.merchant, e.target.value, u.location)}
+                      aria-label={`Assign category for ${u.merchant}`}
+                    >
+                      <option value="" disabled>{busyKey === u.merchant ? "Saving…" : "Choose…"}</option>
+                      {CATEGORIES.filter((c) => c !== "Other").map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </td>
+                </tr>
+                {expanded === u.merchant && (
+                  <tr className="border-b border-hairline last:border-0">
+                    <td colSpan={5} className="p-4" style={{ background: "var(--plane)" }}>
+                      <div className="flex flex-wrap gap-4 text-sm mb-3">
+                        <span><span className="text-muted">Transactions:</span> {u.count}</span>
+                        <span><span className="text-muted">Total spent:</span> {fmtCad(u.total)}</span>
+                        <span><span className="text-muted">Average:</span> {fmtCad(u.avg)}</span>
+                        <span><span className="text-muted">First seen:</span> {u.firstDate}</span>
+                        <span><span className="text-muted">Last seen:</span> {u.lastDate}</span>
+                        {u.location && <span><span className="text-muted">Location:</span> {u.location}</span>}
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        {u.recent?.map((t: any, i: number) => (
+                          <div key={i} className="flex gap-3 text-xs text-ink-2">
+                            <span className="w-20 shrink-0 text-muted">{t.date}</span>
+                            <span className="w-20 shrink-0 text-right tabular-nums">{fmtCad(Math.abs(t.amount))}</span>
+                            <span className="truncate">{t.rawDescription}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <GeoMap query={u.location || titleCase(u.merchant)} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>

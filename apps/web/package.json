@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev -p 3000",
+    "dev:https": "next dev -p 3000 --experimental-https",
     "build": "next build",
     "start": "next start -p 3000"
   },

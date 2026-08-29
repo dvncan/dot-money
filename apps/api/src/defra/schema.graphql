@@ -38,8 +38,9 @@ type Txn {
   rawDescription: String
   category: String @index
   subscriptionId: String @index
-  flags: [String]         # "duplicate" | "unusual" | "recurring"
+  flags: [String]         # "duplicate" | "unusual" | "recurring" | "manual-category"
   source: String          # "plaid" | "csv" | "seed"
+  location: String        # "address, city, region" when the source provides it (Plaid)
 }
 
 type Sub {
