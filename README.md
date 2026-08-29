@@ -1,4 +1,4 @@
-# FinShield
+# DotMoney
 
 A personal finance advocate for Canadians — think Rocket Money, but built here and
 backed by **DefraDB** so user financial data lives in a user-centric, local-first
