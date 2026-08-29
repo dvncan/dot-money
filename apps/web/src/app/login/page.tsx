@@ -39,7 +39,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center p-6">
       <form onSubmit={submit} className="card w-full max-w-sm p-8 flex flex-col gap-4">
         <div className="text-2xl font-semibold">
-          Fin<span style={{ color: "var(--series-1)" }}>Shield</span>
+          Dot<span style={{ color: "var(--series-1)" }}>Money</span>
         </div>
         <p className="text-sm text-ink-2">
           Your financial advocate — subscriptions, refunds, and spending audits for Canadians.
