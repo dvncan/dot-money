@@ -29,7 +29,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex">
       <aside className="w-56 shrink-0 border-r border-hairline p-4 flex flex-col gap-1">
         <div className="text-lg font-semibold px-3 py-2 mb-2">
-          Fin<span style={{ color: "var(--series-1)" }}>Shield</span>
+          Dot<span style={{ color: "var(--series-1)" }}>Money</span>
         </div>
         {NAV.map((item) => (
           <Link
