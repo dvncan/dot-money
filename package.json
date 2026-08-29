@@ -1,0 +1,20 @@
+{
+  "name": "finshield",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Canadian personal finance advocate — subscriptions, refunds, budgets, powered by DefraDB",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:defra": "sh scripts/start-defra.sh",
+    "dev:api": "npm run dev --workspace apps/api",
+    "dev:web": "npm run dev --workspace apps/web",
+    "bootstrap": "npm run bootstrap --workspace apps/api",
+    "seed": "npm run seed --workspace apps/api",
+    "build": "npm run build --workspace apps/api && npm run build --workspace apps/web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

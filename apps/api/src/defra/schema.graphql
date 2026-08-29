@@ -1,0 +1,110 @@
+# FinShield DefraDB schema.
+#
+# Design notes:
+# - Every user-owned document carries an indexed `userId` foreign key rather than
+#   a Defra @relation. This keeps each collection an independent ACP boundary so a
+#   SourceHub policy (owner/reader relations per document) can be layered on in
+#   Phase 2 without a schema migration.
+# - Dates are ISO-8601 strings: lexicographic order == chronological order, which
+#   makes _gt/_lt range filters work without DateTime coercion concerns.
+# - Money is Float in CAD dollars (MVP; revisit as integer cents if rounding bites).
+
+type User {
+  email: String @index
+  passwordHash: String
+  name: String
+  province: String
+  createdAt: String
+}
+
+type BankAccount {
+  userId: String @index
+  institution: String
+  accountName: String
+  accountType: String
+  mask: String
+  plaidItemId: String
+  plaidAccessToken: String
+  source: String          # "plaid" | "csv"
+  createdAt: String
+}
+
+type Txn {
+  userId: String @index
+  bankAccountId: String @index
+  date: String @index     # ISO-8601 (YYYY-MM-DD)
+  amount: Float           # positive = money out (spend), negative = money in
+  merchant: String @index
+  rawDescription: String
+  category: String @index
+  subscriptionId: String @index
+  flags: [String]         # "duplicate" | "unusual" | "recurring"
+  source: String          # "plaid" | "csv" | "seed"
+}
+
+type Sub {
+  userId: String @index
+  vendor: String @index
+  category: String
+  cost: Float
+  billingCycle: String    # "weekly" | "monthly" | "yearly"
+  nextBillingDate: String
+  status: String @index   # "active" | "pending_cancel" | "cancelled"
+  detectedBy: String      # "transaction_match" | "manual"
+  firstSeen: String
+  lastSeen: String
+  occurrences: Int
+  createdAt: String
+}
+
+type CancellationRequest {
+  userId: String @index
+  subscriptionId: String @index
+  vendor: String
+  templateId: String
+  letterContent: String
+  sentDate: String
+  responseDeadline: String
+  status: String @index   # "draft" | "sent" | "responded" | "resolved"
+  refundAmount: Float
+  refundStatus: String    # "none" | "requested" | "received" | "denied"
+  province: String
+  createdAt: String
+}
+
+type Budget {
+  userId: String @index
+  category: String @index
+  limit: Float
+  period: String          # "monthly"
+  createdAt: String
+}
+
+type Goal {
+  userId: String @index
+  name: String
+  category: String        # "savings" | "debt"
+  targetAmount: Float
+  currentAmount: Float
+  deadline: String
+  createdAt: String
+}
+
+type Merchant {
+  name: String @index      # canonical display name, e.g. "Tim Hortons"
+  pattern: String          # lowercase substring matched against merchant + description
+  category: String @index
+  address: String
+  city: String
+  province: String
+  country: String          # "CA" | "US"
+  source: String @index    # "builtin" | "user"
+  userId: String @index    # "" for builtin (global); owner's id for user-added
+  createdAt: String
+}
+
+type Category {
+  name: String @index
+  userId: String @index   # owner — custom categories are per-user
+  createdAt: String
+}
