@@ -34,7 +34,7 @@ function getClient(): PlaidApi {
 export async function createLinkToken(userId: string): Promise<string> {
   const res = await getClient().linkTokenCreate({
     user: { client_user_id: userId },
-    client_name: "FinShield",
+    client_name: "DotMoney",
     products: [Products.Transactions],
     country_codes: [CountryCode.Ca],
     language: "en",

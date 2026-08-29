@@ -1,5 +1,5 @@
 #!/bin/sh
-# Starts a local DefraDB node for FinShield development.
+# Starts a local DefraDB node for DotMoney development.
 # Reads DEFRA_BIN from the environment or the repo .env; falls back to `defradb` on PATH.
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

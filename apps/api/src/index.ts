@@ -36,7 +36,7 @@ app.use("/spending-analysis", analysisRouter);
 app.use(errorHandler);
 
 app.listen(config.port, () => {
-  console.log(`FinShield API listening on http://localhost:${config.port}`);
+  console.log(`dotmoney API listening on http://localhost:${config.port}`);
   console.log(`DefraDB expected at ${config.defraUrl}`);
   if (!config.plaid.enabled) {
     console.log("Plaid keys not set — bank linking disabled, CSV import available.");

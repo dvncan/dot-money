@@ -1,4 +1,4 @@
-# FinShield DefraDB schema.
+# DotMoney DefraDB schema.
 #
 # Design notes:
 # - Every user-owned document carries an indexed `userId` foreign key rather than

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FinShield — your financial advocate",
+  title: "DotMoney — your financial advocate",
   description: "Canadian subscription management, refunds, and spending audits.",
 };
 

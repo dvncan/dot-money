@@ -2,7 +2,7 @@
  * Seeds a demo user with ~5 months of realistic Canadian transactions so the
  * app is fully explorable without Plaid keys.
  *
- *   Login: demo@finshield.ca / demo-password-123
+ *   Login: demo@dotmoney.ca / demo-password-123
  */
 import bcrypt from "bcryptjs";
 import { createDoc, findDocs, health } from "../lib/defra.js";
@@ -14,10 +14,10 @@ if (!(await health())) {
   process.exit(1);
 }
 
-const EMAIL = "demo@finshield.ca";
+const EMAIL = "demo@dotmoney.ca";
 const existing = await findDocs<any>("User", ["email"], { filter: { email: { _eq: EMAIL } }, limit: 1 });
 if (existing[0]) {
-  console.log("Demo user already seeded. Login: demo@finshield.ca / demo-password-123");
+  console.log("Demo user already seeded. Login: demo@dotmoney.ca / demo-password-123");
   process.exit(0);
 }
 
@@ -139,4 +139,4 @@ await createDoc("Budget", { userId, category: "Dining", limit: 250, period: "mon
 await createDoc("Budget", { userId, category: "Streaming", limit: 40, period: "monthly", createdAt: new Date().toISOString() });
 
 console.log(`Seeded ${count} transactions for demo user.`);
-console.log("Login: demo@finshield.ca / demo-password-123");
+console.log("Login: demo@dotmoney.ca / demo-password-123");

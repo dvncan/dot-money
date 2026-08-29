@@ -64,7 +64,7 @@ export default function LoginPage() {
         <button type="button" className="text-sm text-ink-2 underline" onClick={() => setMode(mode === "login" ? "register" : "login")}>
           {mode === "login" ? "New here? Create an account" : "Have an account? Sign in"}
         </button>
-        <p className="text-xs text-muted">Demo login: demo@finshield.ca / demo-password-123</p>
+        <p className="text-xs text-muted">Demo login: demo@dotmoney.ca / demo-password-123</p>
       </form>
     </div>
   );
