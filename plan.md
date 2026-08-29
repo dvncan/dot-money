@@ -1,5 +1,5 @@
 # Canadian Personal Finance Advocate App - Development Plan
-## Project Name: "FinShield" (or similar branding)
+## Project Name: "dotmoney" (or similar branding)
 
 ---
 
