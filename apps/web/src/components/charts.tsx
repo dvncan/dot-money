@@ -42,30 +42,71 @@ export function TrendChart({ data }: { data: Array<{ month: string; total: numbe
 export function CategoryBars({
   data,
   colors,
+  onSelect,
 }: {
-  data: Array<{ category: string; total: number }>;
+  data: Array<{ category: string; total: number; received?: number; net?: number }>;
   colors?: Record<string, string>;
+  /** when given, each row links through to that category's transactions */
+  onSelect?: (category: string) => void;
 }) {
   const max = Math.max(...data.map((d) => d.total), 1);
   return (
     <div className="flex flex-col gap-2">
-      {data.map((d) => (
-        <div key={d.category} className="grid items-center gap-2" style={{ gridTemplateColumns: "110px 1fr 90px" }}>
-          <span className="text-sm text-ink-2 truncate">{d.category}</span>
-          <div className="h-4 rounded" style={{ background: "var(--plane)" }} title={`${d.category}: ${fmtCad(d.total)}`}>
-            <div
-              className="h-4 rounded"
-              style={{
-                width: `${Math.max((d.total / max) * 100, 2)}%`,
-                background: categoryColor(d.category, colors),
-                borderRadius: "4px",
-              }}
-            />
+      {data.map((d) => {
+        const twoWay = (d.received ?? 0) > 0;
+        const row = (
+          <>
+            <span className="text-sm text-ink-2 truncate text-left">{d.category}</span>
+            <div className="h-4 rounded relative" style={{ background: "var(--plane)" }}>
+              <div
+                className="h-4 rounded"
+                style={{
+                  width: `${Math.max((d.total / max) * 100, 2)}%`,
+                  background: categoryColor(d.category, colors),
+                  borderRadius: "4px",
+                }}
+              />
+              {/* money back in: the portion of the bar that was returned */}
+              {twoWay && (
+                <div
+                  className="h-4 absolute top-0 left-0 rounded"
+                  style={{
+                    width: `${Math.min((d.received! / max) * 100, 100)}%`,
+                    background: "var(--delta-good-text)",
+                    opacity: 0.55,
+                    borderRadius: "4px",
+                  }}
+                />
+              )}
+            </div>
+            <span className="text-sm text-right tabular-nums">
+              {fmtCad(twoWay ? d.net! : d.total)}
+              {twoWay && (
+                <span className="block text-xs text-muted">
+                  {fmtCad(d.total)} out · +{fmtCad(d.received!)} in
+                </span>
+              )}
+            </span>
+          </>
+        );
+        const style = { gridTemplateColumns: "110px 1fr 90px" };
+        return onSelect ? (
+          <button
+            key={d.category}
+            className="grid items-center gap-2 w-full rounded hover:bg-plane px-1 -mx-1"
+            style={style}
+            title={`${d.category}: ${fmtCad(d.total)} — view transactions`}
+            onClick={() => onSelect(d.category)}
+          >
+            {row}
+          </button>
+        ) : (
+          <div key={d.category} className="grid items-center gap-2" style={style} title={`${d.category}: ${fmtCad(d.total)}`}>
+            {row}
           </div>
-          <span className="text-sm text-right tabular-nums">{fmtCad(d.total)}</span>
-        </div>
-      ))}
-      {data.length === 0 && <p className="text-sm text-muted">No spending this month yet.</p>}
+        );
+      })}
+      {data.length === 0 && <p className="text-sm text-muted">Nothing in this period.</p>}
     </div>
   );
 }

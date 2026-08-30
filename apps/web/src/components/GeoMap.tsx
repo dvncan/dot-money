@@ -8,23 +8,28 @@ interface Spot {
 }
 
 /**
- * Best-effort merchant locator: geocodes the query via OpenStreetMap's
- * Nominatim (free, no key) and renders an embedded OSM map with a marker.
- * Renders nothing when the query doesn't resolve to a place — many merchant
- * strings (e.g. "AUTOMATIC PAYMENT") simply aren't locations.
+ * Maps a merchant's *actual* address — the structured location Plaid attaches
+ * to a transaction, or an address the user typed on the merchant record.
+ *
+ * It deliberately does NOT geocode a bare merchant name. Nominatim always
+ * returns its best guess, so "ATM Withdrawal" resolves to a real ATM in Dallas
+ * and "Tim Hortons" to an arbitrary store in Surrey — confident, wrong pins.
+ * No address means no map.
  */
-export default function GeoMap({ query }: { query: string }) {
+export default function GeoMap({ address }: { address?: string }) {
   const [spot, setSpot] = useState<Spot | null | "none">(null);
 
   useEffect(() => {
     let live = true;
     setSpot(null);
-    const cleaned = query.replace(/#?\d+/g, " ").replace(/\s{2,}/g, " ").trim();
-    if (cleaned.length < 3) {
+    const query = (address ?? "").trim();
+    // needs to look like a place: a street number or a "city, region" pair
+    const looksLikeAddress = query.length >= 6 && (/\d/.test(query) || query.includes(","));
+    if (!looksLikeAddress) {
       setSpot("none");
       return;
     }
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ca,us&q=${encodeURIComponent(cleaned)}`)
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ca,us&q=${encodeURIComponent(query)}`)
       .then((r) => r.json())
       .then((d) => {
         if (!live) return;
@@ -38,7 +43,7 @@ export default function GeoMap({ query }: { query: string }) {
     return () => {
       live = false;
     };
-  }, [query]);
+  }, [address]);
 
   if (spot === null) return <p className="text-xs text-muted">Looking up location…</p>;
   if (spot === "none") return null;
@@ -48,7 +53,7 @@ export default function GeoMap({ query }: { query: string }) {
   return (
     <div className="mt-3">
       <iframe
-        title={`Map for ${query}`}
+        title={`Map for ${address}`}
         className="w-full h-48 rounded-lg border border-hairline"
         loading="lazy"
         src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${spot.lat},${spot.lon}`}

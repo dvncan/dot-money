@@ -1,34 +1,63 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import ConnectBank from "@/components/ConnectBank";
 import AddMerchant from "@/components/AddMerchant";
+import AccountPicker from "@/components/AccountPicker";
+import MerchantCard from "@/components/MerchantCard";
 import { api, fmtCad } from "@/lib/api";
 import { categoryColor } from "@/lib/colors";
 import { useCategories } from "@/lib/useCategories";
+import { useAccounts } from "@/lib/useAccounts";
 
 export default function TransactionsPage() {
+  // useSearchParams needs a Suspense boundary in a prerendered client page
+  return (
+    <Suspense fallback={null}>
+      <TransactionsView />
+    </Suspense>
+  );
+}
+
+function TransactionsView() {
+  const searchParams = useSearchParams();
   const { categories: CATEGORIES, styles } = useCategories();
+  const { accounts, reload: reloadAccounts } = useAccounts();
   const [txns, setTxns] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState("");
   const [showAddMerchant, setShowAddMerchant] = useState(false);
 
-  // filters & sorting (applied client-side for instant response)
-  const [fCategory, setFCategory] = useState("All");
+  // filters & sorting (applied client-side for instant response).
+  // Category/merchant/account can arrive as query params — e.g. clicking a
+  // category on the dashboard deep-links into this filtered view.
+  const [fCategory, setFCategory] = useState(searchParams.get("category") ?? "All");
+  const [fMerchant, setFMerchant] = useState(searchParams.get("merchant") ?? "All");
   const [fRange, setFRange] = useState<"all" | "month" | "30" | "90">("all");
   const [fSearch, setFSearch] = useState("");
   const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "amount-desc" | "amount-asc" | "merchant">("date-desc");
 
+  const [fAccount, setFAccount] = useState(searchParams.get("accountId") ?? "");
+
   const load = useCallback(() => {
-    api("/transactions?limit=500").then(setTxns).catch((e) => setError(e.message));
-  }, []);
+    const qs = new URLSearchParams({ limit: "500" });
+    if (fAccount) qs.set("accountId", fAccount);
+    api(`/transactions?${qs}`).then(setTxns).catch((e) => setError(e.message));
+  }, [fAccount]);
   useEffect(load, [load]);
+
+  // merchants present in the loaded set, for the merchant filter
+  const merchantOptions = useMemo(
+    () => [...new Set(txns.map((t) => t.merchant).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [txns]
+  );
 
   const visible = useMemo(() => {
     let list = [...txns];
     if (fCategory !== "All") list = list.filter((t) => t.category === fCategory);
+    if (fMerchant !== "All") list = list.filter((t) => t.merchant === fMerchant);
     if (fRange !== "all") {
       let cutoff: string;
       if (fRange === "month") {
@@ -51,10 +80,15 @@ export default function TransactionsPage() {
       merchant: (a, b) => a.merchant.localeCompare(b.merchant) || b.date.localeCompare(a.date),
     };
     return list.sort(cmp[sortBy]);
-  }, [txns, fCategory, fRange, fSearch, sortBy]);
+  }, [txns, fCategory, fMerchant, fRange, fSearch, sortBy]);
 
   const visibleSpend = useMemo(
     () => visible.reduce((s, t) => (t.amount > 0 ? s + t.amount : s), 0),
+    [visible]
+  );
+  // money coming back in the current view (winnings, refunds, cashback)
+  const visibleReceived = useMemo(
+    () => visible.reduce((s, t) => (t.amount < 0 ? s + Math.abs(t.amount) : s), 0),
     [visible]
   );
 
@@ -92,10 +126,25 @@ export default function TransactionsPage() {
     }
   }
 
+  async function remove(id: string) {
+    const prev = txns;
+    setTxns(txns.filter((t) => t._docID !== id)); // optimistic
+    try {
+      await api(`/transactions/${id}`, { method: "DELETE" });
+      reloadAccounts();
+    } catch (err: any) {
+      setTxns(prev);
+      setMsg(`Couldn't delete: ${err.message}`);
+    }
+  }
+
   return (
     <AppShell>
       <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
-        <h1 className="text-2xl font-semibold">Transactions</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-semibold">Transactions</h1>
+          <AccountPicker accounts={accounts} value={fAccount} onChange={setFAccount} onRenamed={reloadAccounts} />
+        </div>
         <div className="flex items-center gap-3">
           <ConnectBank onLinked={load} />
           <button
@@ -116,6 +165,15 @@ export default function TransactionsPage() {
       </p>
       {msg && <p className="text-sm mb-3 text-ink-2">{msg}</p>}
       {error && <p className="text-sm mb-4" style={{ color: "var(--status-critical)" }}>⚠ {error}</p>}
+
+      {fMerchant !== "All" && (
+        <MerchantCard
+          merchant={fMerchant}
+          accountId={fAccount}
+          colors={styles}
+          onClear={() => setFMerchant("All")}
+        />
+      )}
 
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
@@ -149,8 +207,17 @@ export default function TransactionsPage() {
                 >
                   Merchant {sortBy === "merchant" ? "↓" : ""}
                 </button>{" "}
+                <select
+                  className="bg-transparent border border-hairline rounded px-1 py-0.5 text-xs cursor-pointer max-w-[10rem]"
+                  value={fMerchant}
+                  onChange={(e) => setFMerchant(e.target.value)}
+                  aria-label="Filter by merchant"
+                >
+                  <option value="All">All merchants</option>
+                  {merchantOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>{" "}
                 <input
-                  className="bg-transparent border border-hairline rounded px-1.5 py-0.5 text-xs w-28 font-normal"
+                  className="bg-transparent border border-hairline rounded px-1.5 py-0.5 text-xs w-24 font-normal"
                   placeholder="search…"
                   value={fSearch}
                   onChange={(e) => setFSearch(e.target.value)}
@@ -178,6 +245,7 @@ export default function TransactionsPage() {
                   Amount {sortBy === "amount-desc" ? "↓" : sortBy === "amount-asc" ? "↑" : ""}
                 </button>
               </th>
+              <th className="p-3 font-medium w-8" aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
@@ -185,7 +253,13 @@ export default function TransactionsPage() {
               <tr key={t._docID} className="border-b border-hairline last:border-0">
                 <td className="p-3 whitespace-nowrap text-ink-2">{t.date}</td>
                 <td className="p-3">
-                  <p className="truncate max-w-xs">{t.merchant}</p>
+                  <button
+                    className="truncate max-w-xs text-left hover:underline"
+                    title={`Show spend with ${t.merchant}`}
+                    onClick={() => setFMerchant(t.merchant)}
+                  >
+                    {t.merchant}
+                  </button>
                   <p className="text-xs text-muted truncate max-w-xs">{t.rawDescription}</p>
                 </td>
                 <td className="p-3">
@@ -204,6 +278,15 @@ export default function TransactionsPage() {
                 <td className="p-3 text-right tabular-nums" style={t.amount < 0 ? { color: "var(--delta-good-text)" } : undefined}>
                   {t.amount < 0 ? `+${fmtCad(-t.amount)}` : fmtCad(t.amount)}
                 </td>
+                <td className="p-3 text-right">
+                  <button
+                    className="text-muted hover:text-ink"
+                    title={`Delete ${t.merchant} — ${t.date}`}
+                    onClick={() => remove(t._docID)}
+                  >
+                    ×
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -216,11 +299,18 @@ export default function TransactionsPage() {
       </div>
       {visible.length > 0 && (
         <p className="text-xs text-muted mt-2">
-          {visible.length} transaction{visible.length === 1 ? "" : "s"} · {fmtCad(visibleSpend)} spent
-          {(fCategory !== "All" || fRange !== "all" || fSearch.trim()) && (
+          {visible.length} transaction{visible.length === 1 ? "" : "s"} · {fmtCad(visibleSpend)} out
+          {visibleReceived > 0 && (
+            <>
+              {" · "}
+              <span style={{ color: "var(--delta-good-text)" }}>+{fmtCad(visibleReceived)} in</span>
+              {" · "}net {fmtCad(visibleSpend - visibleReceived)}
+            </>
+          )}
+          {(fCategory !== "All" || fMerchant !== "All" || fRange !== "all" || fSearch.trim()) && (
             <button
               className="ml-2 underline hover:text-ink"
-              onClick={() => { setFCategory("All"); setFRange("all"); setFSearch(""); }}
+              onClick={() => { setFCategory("All"); setFMerchant("All"); setFRange("all"); setFSearch(""); }}
             >
               clear filters
             </button>

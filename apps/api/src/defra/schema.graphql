@@ -24,6 +24,7 @@ type BankAccount {
   accountType: String
   mask: String
   plaidItemId: String
+  plaidAccountId: String  # Plaid's account id, mapped to this doc on sync
   plaidAccessToken: String
   source: String          # "plaid" | "csv"
   createdAt: String
@@ -114,6 +115,7 @@ type CategoryStyle {
   userId: String @index
   category: String @index
   color: String            # "slot:1".."slot:8" (theme-aware palette) or "#rrggbb"
+  dashboardHidden: String  # "1" when the category is switched off on the dashboard
   createdAt: String
 }
 

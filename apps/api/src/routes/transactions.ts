@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
-import { findDocs, updateDoc } from "../lib/defra.js";
+import { deleteDoc, findDocs, updateDoc } from "../lib/defra.js";
 import { assertAllowedCategory } from "../services/categories.js";
 import { recategorizeUser } from "../services/recategorize.js";
 
@@ -14,6 +14,9 @@ router.get("/", async (req: AuthedRequest, res, next) => {
     const filter: Record<string, unknown> = { userId: { _eq: req.userId } };
     if (typeof req.query.category === "string") filter.category = { _eq: req.query.category };
     if (typeof req.query.merchant === "string") filter.merchant = { _eq: req.query.merchant };
+    if (typeof req.query.accountId === "string" && req.query.accountId) {
+      filter.bankAccountId = { _eq: req.query.accountId };
+    }
     const limit = Math.min(Number(req.query.limit ?? 100), 500);
     const offset = Number(req.query.offset ?? 0);
     let txns = await findDocs<any>(
@@ -48,6 +51,22 @@ router.patch("/:id", async (req: AuthedRequest, res, next) => {
       if (!flags.includes("manual-category")) flags.push("manual-category");
       await updateDoc("Txn", req.params.id!, { category, flags });
     }
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /transactions/:id — remove a single transaction (bad import, duplicate).
+// Budgets and the dashboard recompute from transactions, so totals follow.
+router.delete("/:id", async (req: AuthedRequest, res, next) => {
+  try {
+    const owned = await findDocs<any>("Txn", ["merchant"], {
+      filter: { _docID: { _eq: req.params.id }, userId: { _eq: req.userId } },
+      limit: 1,
+    });
+    if (!owned[0]) return res.status(404).json({ error: "Transaction not found" });
+    await deleteDoc("Txn", req.params.id!);
     res.json({ ok: true });
   } catch (err) {
     next(err);

@@ -87,9 +87,17 @@ Demo login: `demo@dotmoney.ca` / `demo-password-123` (~283 seeded transactions,
 `GET /spending-analysis/dashboard?months=1|3|6|12|0&accountId=…|anomalies|opportunities`
 
 Transactions and the dashboard both scope to a single account (`accountId`) or
-all of them, and the dashboard window is selectable (1M/3M/6M/1Y/All). CSV
-imports create an account row that can be renamed, so each upload is tagged and
-filterable.
+all of them. The dashboard window is weekly or monthly with a configurable
+count (`?period=week&count=8`), categories can be switched off per user, and
+clicking a category deep-links to its filtered transactions. CSV imports create
+an account row that can be renamed, so each upload is tagged and filterable.
+
+**Two-way merchants.** Money can flow back from a spending merchant — gambling
+winnings, refunds, cashback. Treating those merchants as outflow-only overstates
+the cost, so the merchant rollup, the category bars and the dashboard all report
+**out / in / net** wherever inflows exist. This only works when both directions
+normalize to the same merchant name, which is why the inbound e-transfer wording
+("Autodeposit") is stripped along with the outbound wording.
 
 ## Categorization
 

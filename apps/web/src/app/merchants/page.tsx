@@ -196,7 +196,8 @@ export default function MerchantsPage() {
                           </div>
                         ))}
                       </div>
-                      <GeoMap query={u.location || titleCase(u.merchant)} />
+                      {/* only when the transaction actually carried a location */}
+                      <GeoMap address={u.location} />
                     </td>
                   </tr>
                 )}

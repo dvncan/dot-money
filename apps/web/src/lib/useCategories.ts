@@ -13,6 +13,7 @@ export function useCategories() {
   const [custom, setCustom] = useState<Array<{ _docID: string; name: string }>>([]);
   const [styles, setStyles] = useState<Record<string, string>>({});
   const [hidden, setHidden] = useState<string[]>([]);
+  const [dashboardHidden, setDashboardHidden] = useState<string[]>([]);
 
   const reload = useCallback(() => {
     api<any>("/categories")
@@ -21,10 +22,23 @@ export function useCategories() {
         setCustom(d.custom);
         setStyles(d.styles ?? {});
         setHidden(d.hidden ?? []);
+        setDashboardHidden(d.dashboardHidden ?? []);
       })
       .catch(() => {}); // keep builtin fallback on error
   }, []);
   useEffect(reload, [reload]);
 
-  return { categories, custom, styles, hidden, reload };
+  /** Switch a category on/off for the dashboard (optimistic). */
+  const setVisible = useCallback(async (category: string, visible: boolean) => {
+    setDashboardHidden((prev) =>
+      visible ? prev.filter((c) => c !== category) : [...new Set([...prev, category])]
+    );
+    try {
+      await api("/categories/visibility", { method: "POST", body: JSON.stringify({ category, visible }) });
+    } finally {
+      reload();
+    }
+  }, [reload]);
+
+  return { categories, custom, styles, hidden, dashboardHidden, setVisible, reload };
 }

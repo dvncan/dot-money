@@ -49,12 +49,16 @@ router.get("/", async (req: AuthedRequest, res, next) => {
       getCustomCategories(req.userId!),
       getDisplayBuiltins(req.userId!),
     ]);
-    const styleRows = await findDocs<any>("CategoryStyle", ["category", "color"], {
+    const styleRows = await findDocs<any>("CategoryStyle", ["category", "color", "dashboardHidden"], {
       filter: { userId: { _eq: req.userId } },
       limit: 500,
     });
     const styles: Record<string, string> = {};
-    for (const s of styleRows) styles[s.category] = s.color;
+    const dashboardHidden: string[] = [];
+    for (const s of styleRows) {
+      if (s.color) styles[s.category] = s.color;
+      if (s.dashboardHidden === "1") dashboardHidden.push(s.category);
+    }
     const aliases = await getCategoryAliases(req.userId!);
     const hidden = BUILTIN_CATEGORIES.filter((b) => aliases[b] === "");
     res.json({
@@ -63,6 +67,7 @@ router.get("/", async (req: AuthedRequest, res, next) => {
       all: [...builtins, ...custom.map((c) => c.name)],
       styles,
       hidden,
+      dashboardHidden,
     });
   } catch (err) {
     next(err);
@@ -221,12 +226,16 @@ router.post("/style", async (req: AuthedRequest, res, next) => {
     const allowed = await getAllowedCategories(req.userId!);
     if (!allowed.includes(category)) return res.status(400).json({ error: `Unknown category "${category}"` });
 
-    const existing = await findDocs<any>("CategoryStyle", ["category"], {
+    const existing = await findDocs<any>("CategoryStyle", ["category", "dashboardHidden"], {
       filter: { userId: { _eq: req.userId }, category: { _eq: category } },
       limit: 1,
     });
     if (color === "default") {
-      if (existing[0]) await deleteDoc("CategoryStyle", existing[0]._docID);
+      // the row also carries dashboard visibility — only drop it if that is unset
+      if (existing[0]) {
+        if (existing[0].dashboardHidden === "1") await updateDoc("CategoryStyle", existing[0]._docID, { color: "" });
+        else await deleteDoc("CategoryStyle", existing[0]._docID);
+      }
     } else if (existing[0]) {
       await updateDoc("CategoryStyle", existing[0]._docID, { color });
     } else {
@@ -234,10 +243,48 @@ router.post("/style", async (req: AuthedRequest, res, next) => {
         userId: req.userId,
         category,
         color,
+        dashboardHidden: "",
         createdAt: new Date().toISOString(),
       });
     }
     res.json({ ok: true, category, color });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /categories/visibility — switch a category on/off for dashboard charts.
+// Hidden categories still categorize transactions; they're just excluded from
+// the dashboard's totals and breakdown.
+router.post("/visibility", async (req: AuthedRequest, res, next) => {
+  try {
+    const { category, visible } = z.object({
+      category: z.string().min(1),
+      visible: z.boolean(),
+    }).parse(req.body);
+
+    const allowed = await getAllowedCategories(req.userId!);
+    if (!allowed.includes(category)) return res.status(400).json({ error: `Unknown category "${category}"` });
+
+    const existing = await findDocs<any>("CategoryStyle", ["category", "color"], {
+      filter: { userId: { _eq: req.userId }, category: { _eq: category } },
+      limit: 1,
+    });
+    const flag = visible ? "" : "1";
+    if (existing[0]) {
+      // no color and now visible again -> the row carries nothing, drop it
+      if (visible && !existing[0].color) await deleteDoc("CategoryStyle", existing[0]._docID);
+      else await updateDoc("CategoryStyle", existing[0]._docID, { dashboardHidden: flag });
+    } else if (!visible) {
+      await createDoc("CategoryStyle", {
+        userId: req.userId,
+        category,
+        color: "",
+        dashboardHidden: flag,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    res.json({ ok: true, category, visible });
   } catch (err) {
     next(err);
   }

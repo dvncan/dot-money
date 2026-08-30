@@ -61,6 +61,7 @@ export async function exchangeAndStore(userId: string, publicToken: string) {
       accountType: acct.subtype ?? acct.type,
       mask: acct.mask ?? "",
       plaidItemId: itemId,
+      plaidAccountId: acct.account_id,
       plaidAccessToken: accessToken, // MVP: plaintext in local node. TODO: envelope-encrypt before hosted deployment.
       source: "plaid",
       createdAt: new Date().toISOString(),
@@ -74,8 +75,13 @@ export async function exchangeAndStore(userId: string, publicToken: string) {
 export async function syncTransactions(userId: string): Promise<number> {
   const accounts = await findDocs<any>(
     "BankAccount",
-    ["plaidAccessToken", "plaidItemId", "source"],
+    ["plaidAccessToken", "plaidItemId", "plaidAccountId", "source"],
     { filter: { userId: { _eq: userId }, source: { _eq: "plaid" } } }
+  );
+  // Plaid's account_id -> our BankAccount docID, so transactions link to the
+  // account rows the UI filters on
+  const accountByPlaidId = new Map<string, string>(
+    accounts.filter((a: any) => a.plaidAccountId).map((a: any) => [a.plaidAccountId, a._docID])
   );
   const plaid = getClient();
   let imported = 0;
@@ -117,10 +123,11 @@ export async function syncTransactions(userId: string): Promise<number> {
         : "";
       await createDoc("Txn", {
         userId,
-        bankAccountId: t.account_id,
+        bankAccountId: accountByPlaidId.get(t.account_id) ?? t.account_id,
         date: t.date,
         amount: t.amount, // Plaid: positive = outflow, matching our convention
-        merchant: result.canonicalName ? normalizeMerchant(result.canonicalName) : normalized,
+        // catalog names are already clean and hand-written ("Max (HBO)") — use verbatim
+        merchant: result.canonicalName ?? normalized,
         rawDescription: t.name,
         category: result.category,
         subscriptionId: "",

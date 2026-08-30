@@ -101,7 +101,8 @@ export async function importCsv(userId: string, csvText: string, accountLabel = 
     const result = categorizeTxn(merchantIndex, normalized, rawDescription, undefined, aliases);
     await createDoc("Txn", {
       userId, bankAccountId: accountId, date, amount,
-      merchant: result.canonicalName ? normalizeMerchant(result.canonicalName) : normalized,
+      // catalog names are already clean and hand-written ("Max (HBO)") — use verbatim
+      merchant: result.canonicalName ?? normalized,
       rawDescription,
       category: iCategory >= 0 && row[iCategory]?.trim() ? row[iCategory]!.trim() : result.category,
       subscriptionId: "", flags: [], source: "csv",
