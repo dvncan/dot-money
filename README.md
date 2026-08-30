@@ -30,7 +30,7 @@ npm run bootstrap && npm run seed && npm run dev:api   # 2. schema + demo data +
 npm run dev:web               # 3. web app → http://localhost:3000
 ```
 
-Demo login: `demo@finshield.ca` / `demo-password-123` (~283 seeded transactions,
+Demo login: `demo@dotmoney.ca` / `demo-password-123` (~283 seeded transactions,
 8 detectable subscriptions including deliberate streaming duplicates).
 
 ## How the data layer works
@@ -78,14 +78,30 @@ Demo login: `demo@finshield.ca` / `demo-password-123` (~283 seeded transactions,
 
 `POST /auth/register|login|refresh-token` · `GET|PATCH /user/profile` ·
 `POST /banks/link-token|exchange|sync|import-csv` · `GET /banks/accounts` ·
-`GET|PATCH /transactions` · `POST /transactions/recategorize` ·
+`GET|PATCH|DELETE /transactions` · `POST /transactions/recategorize` ·
+`PATCH /banks/accounts/:id` (rename/tag an import) ·
 `GET|POST|DELETE /merchants` · `GET /merchants/uncategorized` ·
 `GET|POST|PATCH|DELETE /subscriptions` ·
 `GET /cancellation-requests/templates` · `GET|POST|PATCH /cancellation-requests` ·
 `GET|POST|PATCH|DELETE /budgets` ·
-`GET /spending-analysis/dashboard|anomalies|opportunities`
+`GET /spending-analysis/dashboard?months=1|3|6|12|0&accountId=…|anomalies|opportunities`
+
+Transactions and the dashboard both scope to a single account (`accountId`) or
+all of them, and the dashboard window is selectable (1M/3M/6M/1Y/All). CSV
+imports create an account row that can be renamed, so each upload is tagged and
+filterable.
 
 ## Categorization
+
+**Merchant naming.** Bank descriptors bury the merchant in transaction-type
+wording, processor prefixes, corporate suffixes and a per-transaction reference
+code — `"E-Transfer Request Fulfilled Paybilt Inc. Km8f9u"` → `"Paybilt"`.
+`normalizeMerchant` strips all four (reference codes only from the tail, so
+`F45 Training` and `7-Eleven` survive) and title-cases the result, with catalog
+names used verbatim so hand-written ones like `Max (HBO)` stay intact. Without
+this every payment looks like a new merchant. Re-run over existing data with
+`npx tsx src/scripts/renormalize-merchants.ts [--dry]` — it cleans user-created
+merchant *rule* names too, since a matching rule supplies the stored name.
 
 Merchant-first: the Defra `Merchant` collection holds a built-in catalog of
 ~375 Canadian + US merchants plus each user's own entries, and is the primary
